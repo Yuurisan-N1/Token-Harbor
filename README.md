@@ -13,9 +13,9 @@
 </p>
 
 <p>
-  <b>Token Harbor Bot</b> is a Rust automation client for Token Harbor.<br/>
-  It opens a disposable mailbox, signs up a fresh account through a Turnstile solver, confirms the verification email, unlocks free models, creates an API key, and on every cycle sends one chat to keep the account active and reads the usage headers, with enroll mode to register any number of accounts in one run, all with proxy support.<br/>
-  Built and distributed by <b>Yuurisandesu</b>.
+  <b>Token Harbor Bot</b> は Token Harbor 向けの Rust 製自動化クライアントやで。<br/>
+  使い捨てメールボックスを開いて、Turnstile ソルバーで新しいアカウントを登録して、認証メールを確認して、無料モデルをアンロックして、API キーを作って、毎サイクルごとにチャットを1回送ってアカウントを維持しながら使用量ヘッダーも読み取るんや。複数アカウントを一気に登録するエンロールモードもあって、プロキシにも対応してるで。<br/>
+  作って配布してるのは <b>Yuurisandesu</b> やで。
 </p>
 
 </div>
@@ -23,38 +23,38 @@
 <hr/>
 
 <p align="center">
-  <img src="image/image.png" alt="preview" width="100%"/>
+  <img src="image/image.png" alt="プレビュー" width="100%"/>
 </p>
 
 <hr/>
 
 ---
 
-## Table of Contents
+## 目次
 
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Running the Bot](#running-the-bot)
-- [Run Modes](#run-modes)
-- [Download Prebuilt Binary](#download-prebuilt-binary)
-- [Features](#features)
-- [File Structure](#file-structure)
-- [Continuous Integration](#continuous-integration)
-- [Disclaimer](#disclaimer)
+- [必要なもの](#必要なもの)
+- [インストール](#インストール)
+- [設定](#設定)
+- [ボットの動かし方](#ボットの動かし方)
+- [実行モード](#実行モード)
+- [ビルド済みバイナリのダウンロード](#ビルド済みバイナリのダウンロード)
+- [機能](#機能)
+- [ファイル構成](#ファイル構成)
+- [CI（継続的インテグレーション）](#ci継続的インテグレーション)
+- [免責事項](#免責事項)
 
 ---
 
-## Requirements
+## 必要なもの
 
-- Rust stable toolchain (install from [rustup.rs](https://rustup.rs), only needed if building from source)
+- Rust 安定版ツールチェーン（ソースからビルドするときだけ必要、[rustup.rs](https://rustup.rs) からインストールしてな）
 - Git
 
 ---
 
-## Installation
+## インストール
 
-### Install Rust
+### Rust のインストール
 
 **Linux / macOS:**
 
@@ -63,7 +63,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
-Verify:
+確認：
 
 ```bash
 rustc --version
@@ -71,7 +71,7 @@ rustc --version
 
 **Windows:**
 
-Download and run the installer from https://rustup.rs, then reopen the terminal and verify:
+https://rustup.rs からインストーラーをダウンロードして実行したら、ターミナルを開き直して確認してな：
 
 ```cmd
 rustc --version
@@ -85,7 +85,7 @@ proot-distro install ubuntu
 proot-distro login ubuntu
 ```
 
-Then inside Ubuntu:
+Ubuntu の中に入ったら：
 
 ```bash
 apt update && apt install -y curl git build-essential pkg-config libssl-dev
@@ -95,16 +95,16 @@ source $HOME/.cargo/env
 
 ---
 
-### Clone and Build
+### クローンしてビルド
 
-**Clone the repository:**
+**リポジトリをクローン：**
 
 ```bash
 git clone https://github.com/Yuurisan-N1/Token-Harbor.git
 cd Token-Harbor
 ```
 
-**Build the release binary:**
+**リリースバイナリをビルド：**
 
 ```bash
 ./run.sh build
@@ -112,30 +112,30 @@ cd Token-Harbor
 
 ---
 
-## Configuration
+## 設定
 
-### 1. API Keys (data.txt)
+### 1. API キー（data.txt）
 
-`data.txt` holds the API keys of enrolled accounts, one per line. On the first run the file can be empty; the bot signs up a fresh account and writes its key automatically. Use enroll mode to fill the file with multiple keys before the first run cycle.
+`data.txt` には登録済みアカウントの API キーを1行ずつ書くんや。初回はファイルが空でもええで。ボットが自動でアカウント作って鍵を書き込んでくれるから。複数の鍵を先に用意したいならエンロールモードを使ってな。
 
-### 2. Proxy (proxy.txt)
+### 2. プロキシ（proxy.txt）
 
-Fill `proxy.txt` with proxies, one per line (optional, leave empty to connect directly):
+`proxy.txt` にプロキシを1行ずつ書いてな（任意、空のままでも直接接続できるで）：
 
 ```
 http://user:pass@host:port
 socks5://user:pass@host:port
 ```
 
-Proxies are paired to accounts by index. Proxy credentials are masked in the log.
+プロキシはアカウントにインデックス順で割り当てられるで。ログにはプロキシの認証情報はマスクして表示されるから安心してな。
 
-### 3. Bot Settings (config.json)
+### 3. ボットの設定（config.json）
 
-`sleep_seconds` controls how many seconds the bot waits between cycles. The value is clamped between 60 and 86400 seconds. An optional `timezone` key sets the timezone used during signup. The default sleep is 3600 seconds (one hour).
+`sleep_seconds` はサイクルとサイクルの間に何秒待つかを設定するんや。60〜86400秒の範囲に収まるように自動でクランプされるで。`timezone` を任意で設定すれば、登録時に使うタイムゾーンを変えられるで。デフォルトは3600秒（1時間）やで。
 
-### 4. Solver (solver/solver.yaml)
+### 4. ソルバー（solver/solver.yaml）
 
-`solver/solver.yaml` holds the Turnstile solver endpoint used during signup. The default URL is already set:
+`solver/solver.yaml` には登録時に使う Turnstile ソルバーのエンドポイントを書くんや。デフォルトの URL は最初から入ってるで：
 
 ```yaml
 solver:
@@ -144,43 +144,43 @@ solver:
 
 ---
 
-## Running the Bot
+## ボットの動かし方
 
-Make `run.sh` executable first (Linux / macOS / Termux):
+Linux / macOS / Termux では最初に実行権限を付けてな：
 
 ```bash
 chmod +x run.sh
 ```
 
-Then choose a mode:
+あとはモードを選んで実行するだけや：
 
 ```bash
-./run.sh run            # build if needed and run one cycle in foreground
-./run.sh enroll <n>     # sign up n accounts and save every key to data.txt
-./run.sh bg             # build if needed and run in background, logs to tokenharbor-bot.log
-./run.sh bgprobe        # run probe in background
-./run.sh screen         # build if needed and run in a detached screen session
-./run.sh stop           # stop the background or screen session
-./run.sh probe          # check the site, the solver, and every proxy
-./run.sh selftest       # offline checks, no network
-./run.sh build          # build only, do not run
+./run.sh run            # 必要ならビルドして1サイクルをフォアグラウンドで動かす
+./run.sh enroll <n>     # n 個のアカウントを登録して鍵を全部 data.txt に保存する
+./run.sh bg             # 必要ならビルドしてバックグラウンドで動かす（ログは tokenharbor-bot.log に）
+./run.sh bgprobe        # プローブをバックグラウンドで動かす
+./run.sh screen         # 必要ならビルドして screen セッションで動かす
+./run.sh stop           # バックグラウンドや screen セッションを止める
+./run.sh probe          # サイト・ソルバー・各プロキシをチェックする
+./run.sh selftest       # ネットワーク不要のオフラインチェック
+./run.sh build          # ビルドだけして動かさへん
 ```
 
-For background mode, tail the log anytime:
+バックグラウンドモードのログはいつでも確認できるで：
 
 ```bash
 tail -f tokenharbor-bot.log
 ```
 
-For screen mode, attach anytime:
+screen モードはいつでもアタッチできるで：
 
 ```bash
 screen -r tokenharbor-bot
 ```
 
-Press `Ctrl+C` once to stop the bot cleanly when running in foreground.
+フォアグラウンドで動かしてるときは `Ctrl+C` を1回押せばきれいに止まるで。
 
-### Manual run
+### 手動で動かすとき
 
 ```bash
 # Linux / macOS / Termux
@@ -192,166 +192,166 @@ Press `Ctrl+C` once to stop the bot cleanly when running in foreground.
 
 ---
 
-## Run Modes
+## 実行モード
 
-| Mode | Command | Description |
+| モード | コマンド | 説明 |
 |---|---|---|
-| run | `./run.sh run` | One cycle: sign up if no key exists, then chat and usage report |
-| enroll | `./run.sh enroll <n>` | Sign up n accounts and append every key to data.txt |
-| bg | `./run.sh bg` | Same as run but in background with log file |
-| bgprobe | `./run.sh bgprobe` | Probe in background |
-| screen | `./run.sh screen` | Same as run in a detached screen session |
-| probe | `./run.sh probe` | Check the site, the solver, and every proxy |
-| selftest | `./run.sh selftest` | Offline checks, no network |
-| stop | `./run.sh stop` | Stop background or screen session |
-| build | `./run.sh build` | Build only |
+| run | `./run.sh run` | 1サイクル実行：鍵がなければ登録して、チャットと使用量レポートを実行 |
+| enroll | `./run.sh enroll <n>` | n 個のアカウントを登録して鍵を全部 data.txt に追記 |
+| bg | `./run.sh bg` | run と同じだけどバックグラウンドでログファイルつき |
+| bgprobe | `./run.sh bgprobe` | プローブをバックグラウンドで実行 |
+| screen | `./run.sh screen` | run と同じだけど detach した screen セッションで実行 |
+| probe | `./run.sh probe` | サイト・ソルバー・各プロキシをチェック |
+| selftest | `./run.sh selftest` | ネットワーク不要のオフラインチェック |
+| stop | `./run.sh stop` | バックグラウンドや screen セッションを止める |
+| build | `./run.sh build` | ビルドだけ |
 
 ---
 
-## Download Prebuilt Binary
+## ビルド済みバイナリのダウンロード
 
-Prebuilt binaries are automatically compiled on every push to main via GitHub release across 3 platforms.
+main へのプッシュのたびに GitHub Actions で3プラットフォーム向けに自動ビルドされて、リリースにアップされるで。
 
-Download the latest binaries from the release page:
+最新のバイナリはここからダウンロードしてな：
 https://github.com/Yuurisan-N1/Token-Harbor/releases/latest
 
-Open the latest successful run and scroll to the Artifacts section.
+最新の成功したビルドを開いて、Artifacts のとこまでスクロールしてな。
 
-| Artifact | Platform |
+| アーティファクト | プラットフォーム |
 |---|---|
 | `tokenharbor-bot-linux-x86_64` | Linux x86_64 |
 | `tokenharbor-bot-windows-x86_64` | Windows x86_64 |
 | `tokenharbor-bot-macos-aarch64` | macOS Apple Silicon |
 
-**Linux / macOS after downloading:**
+**Linux / macOS のダウンロード後：**
 
 ```bash
 chmod +x tokenharbor-bot-linux-x86_64
 ./tokenharbor-bot-linux-x86_64
 ```
 
-**Windows:**
+**Windows：**
 
 ```
 .\tokenharbor-bot-windows-x86_64.exe
 ```
 
-Place the binary in the same folder as `data.txt`, `proxy.txt`, `config.json`, and `solver/solver.yaml` before running.
+動かす前に `data.txt`・`proxy.txt`・`config.json`・`solver/solver.yaml` と同じフォルダにバイナリを置いてな。
 
 ---
 
-## Features
+## 機能
 
-### Auto Signup via Disposable Mailbox
-When no key exists in `data.txt` or enroll mode is used, the bot opens a disposable mailbox automatically through one of four providers tried in order: mail.tm, mail.io, mail.lol, and Guerrilla Mail. It generates a random email address with the `th-` prefix, submits the signup form with a fresh password and the account timezone, and waits for the verification email.
+### 使い捨てメールボックスで自動登録
+`data.txt` に鍵がないときやエンロールモードのとき、ボットが自動で使い捨てメールボックスを開くんや。mail.tm → mail.io → mail.lol → Guerrilla Mail の順に試してくで。`th-` プレフィックスでランダムなメールアドレスを生成して、新しいパスワードとアカウントのタイムゾーンを入れて登録フォームを送信して、認証メールが届くまで待つんや。
 
-### Turnstile Solver
-Every signup request includes a Cloudflare Turnstile token solved automatically through the endpoint in `solver/solver.yaml`. The solver handshake is verified on startup and in probe mode.
+### Turnstile ソルバー
+登録リクエストのたびに `solver/solver.yaml` のエンドポイントで Cloudflare Turnstile トークンを自動で解くで。起動時とプローブモードでソルバーの接続確認もやってくれるで。
 
-### Email Verification
-The bot polls the inbox after signup and follows the verification link when the email arrives. If the first polling window times out, the bot retries before giving up.
+### メール認証
+登録後にメールボックスをポーリングして、認証メールが届いたら確認リンクを踏んでくれるで。最初のポーリングがタイムアウトしたら、諦める前にリトライもするで。
 
-### Free Model Unlock
-After verification, the bot enables the free model tier on the account so the API key can access models without credit.
+### 無料モデルのアンロック
+認証が終わったら、API キーがクレジットなしでモデルにアクセスできるよう無料モデルティアをアカウントに有効化するんや。
 
-### API Key Creation
-A named API key is created under the account and appended to `data.txt`. The key is logged in masked form. The account email, password, and key are saved to `session.json` for reference.
+### API キーの作成
+アカウントに名前つきの API キーを作って `data.txt` に追記するで。キーはマスクされた形でログに出るで。アカウントのメールアドレス・パスワード・鍵は `session.json` に保存されるで。
 
-### Chat and Usage Report
-On every run cycle the bot reads the model list, picks a free model, sends one short chat to keep the account active, and then reads the usage headers from the server. The used percentage and the reset countdown are logged per account.
+### チャットと使用量レポート
+毎サイクル、ボットがモデルリストを読んで無料モデルを選んで、アカウントを維持するために短いチャットを1回送って、サーバーから使用量ヘッダーを読み取るんや。使用率とリセットまでのカウントダウンがアカウントごとにログに出るで。
 
-### Enroll Mode
-Running `enroll <n>` signs up exactly n accounts one by one, writing each key to `data.txt` as it completes. Each account uses its own proxy slot from `proxy.txt`.
+### エンロールモード
+`enroll <n>` で動かすと、ちょうど n 個のアカウントを1つずつ登録して、完了するたびに鍵を `data.txt` に書き込んでくで。各アカウントは `proxy.txt` のプロキシスロットを順番に使うで。
 
-### Probe Mode
-Probe checks the signup page, the model list endpoint, the solver handshake, and the exit country of every proxy in `proxy.txt` without signing up or modifying any files.
+### プローブモード
+プローブは登録ページ・モデルリストエンドポイント・ソルバーの接続・`proxy.txt` の全プロキシの出口国をチェックするで。登録したりファイルを変えたりはしいひんで。
 
-### Proxy Support
-Proxies are loaded from `proxy.txt` and assigned to accounts by position. Running without proxies is fully supported.
+### プロキシ対応
+`proxy.txt` からプロキシを読み込んでアカウントに順番で割り当てるで。プロキシなしでも全然動くで。
 
-### Auto Countdown
-After each cycle completes the bot shows a live `HH:MM:SS` countdown until the next cycle starts.
+### 自動カウントダウン
+各サイクルが終わったら次のサイクルまでの時間を `HH:MM:SS` でリアルタイムに表示してくれるで。
 
 ---
 
-## File Structure
+## ファイル構成
 
 ```text
 Token-Harbor/
 ├── .github/
 │   └── workflows/
-│       └── build.yml                    # CI: 3-platform matrix build
+│       └── build.yml                    # CI: 3プラットフォームのマトリックスビルド
 ├── assets/
-│   └── icon.ico                         # Windows binary icon
+│   └── icon.ico                         # Windows バイナリのアイコン
 ├── solver/
-│   └── solver.yaml                      # Turnstile solver endpoint URL
+│   └── solver.yaml                      # Turnstile ソルバーのエンドポイント URL
 ├── src/
 │   ├── cli/
-│   │   ├── dispatch.rs                  # CLI mode selector and usage text
-│   │   ├── enroll.rs                    # Enroll mode: batch account signup
+│   │   ├── dispatch.rs                  # CLI モードセレクターと使い方テキスト
+│   │   ├── enroll.rs                    # エンロールモード：バッチアカウント登録
 │   │   ├── mod.rs
-│   │   ├── probe.rs                     # Probe mode: site, solver, and proxy check
-│   │   └── selftest.rs                  # Offline self-test checks
+│   │   ├── probe.rs                     # プローブモード：サイト・ソルバー・プロキシチェック
+│   │   └── selftest.rs                  # オフラインのセルフテストチェック
 │   ├── job/
-│   │   ├── loop.rs                      # Cycle runner for run and enroll modes
+│   │   ├── loop.rs                      # run・enroll モードのサイクルランナー
 │   │   ├── mod.rs
-│   │   └── onboard.rs                   # Signup flow, API key creation, chat and usage report
+│   │   └── onboard.rs                   # 登録フロー・API キー作成・チャットと使用量レポート
 │   ├── net/
-│   │   ├── client.rs                    # HTTP client and cookie handling
-│   │   ├── egress.rs                    # Proxy parser and egress country check
-│   │   ├── gate.rs                      # Turnstile solver WebSocket gate
+│   │   ├── client.rs                    # HTTP クライアントとクッキー処理
+│   │   ├── egress.rs                    # プロキシパーサーと出口国チェック
+│   │   ├── gate.rs                      # Turnstile ソルバーの WebSocket ゲート
 │   │   └── mod.rs
 │   ├── step/
-│   │   ├── apikey.rs                    # API key creation request
-│   │   ├── freemode.rs                  # Free model tier enable request
-│   │   ├── mailbox.rs                   # Disposable mailbox: mail.tm, mail.io, mail.lol, Guerrilla
+│   │   ├── apikey.rs                    # API キー作成リクエスト
+│   │   ├── freemode.rs                  # 無料モデルティア有効化リクエスト
+│   │   ├── mailbox.rs                   # 使い捨てメールボックス：mail.tm, mail.io, mail.lol, Guerrilla
 │   │   ├── mod.rs
-│   │   ├── signup.rs                    # Account registration form and identity generation
-│   │   └── verify.rs                    # Email verification link follow and confirm
+│   │   ├── signup.rs                    # アカウント登録フォームと ID 生成
+│   │   └── verify.rs                    # 認証リンクの踏み込みと確認
 │   ├── support/
-│   │   ├── banner.rs                    # ASCII banner and terminal title
+│   │   ├── banner.rs                    # ASCII バナーとターミナルタイトル
 │   │   ├── cfg/
-│   │   │   ├── loader.rs                # Config, key list, and proxy loader
+│   │   │   ├── loader.rs                # 設定・鍵リスト・プロキシのローダー
 │   │   │   ├── mod.rs
-│   │   │   └── schema.rs                # Config schema and sleep/timezone settings
+│   │   │   └── schema.rs                # 設定スキーマとスリープ・タイムゾーン設定
 │   │   ├── consts/
-│   │   │   ├── app.rs                   # File name constants and account generation params
+│   │   │   ├── app.rs                   # ファイル名定数とアカウント生成パラメーター
 │   │   │   ├── mod.rs
-│   │   │   └── net.rs                   # Base URL, solver path, and mail service URLs
-│   │   ├── error.rs                     # Error types and result alias
+│   │   │   └── net.rs                   # ベース URL・ソルバーパス・メールサービス URL
+│   │   ├── error.rs                     # エラー型と Result エイリアス
 │   │   ├── log/
-│   │   │   ├── format.rs                # Colored log helpers and countdown
-│   │   │   ├── init.rs                  # Signal handler setup
+│   │   │   ├── format.rs                # 色付きログヘルパーとカウントダウン
+│   │   │   ├── init.rs                  # シグナルハンドラーのセットアップ
 │   │   │   └── mod.rs
 │   │   └── mod.rs
 │   ├── wire/
-│   │   ├── endpoint.rs                  # API endpoint path constants
-│   │   ├── form.rs                      # JSON request body builders
+│   │   ├── endpoint.rs                  # API エンドポイントパスの定数
+│   │   ├── form.rs                      # JSON リクエストボディのビルダー
 │   │   ├── mod.rs
-│   │   └── shape.rs                     # JSON response parsers
-│   └── main.rs                          # Entry point, Ctrl+C handler, root dir resolver
+│   │   └── shape.rs                     # JSON レスポンスのパーサー
+│   └── main.rs                          # エントリーポイント・Ctrl+C ハンドラー・ルートディレクトリリゾルバー
 ├── .gitignore
-├── build.rs                             # Build script: embeds icon into Windows binary
+├── build.rs                             # ビルドスクリプト：Windows バイナリにアイコンを埋め込む
 ├── Cargo.lock
-├── Cargo.toml                           # Project manifest and dependencies
-├── config.json                          # Sleep duration and optional timezone setting
-├── data.txt                             # API keys, one per line (written by signup and enroll)
-├── HOWTO.txt                            # Quick start guide
+├── Cargo.toml                           # プロジェクトマニフェストと依存関係
+├── config.json                          # スリープ時間と任意のタイムゾーン設定
+├── data.txt                             # API キー（1行1つ、登録・エンロールで自動書き込み）
+├── HOWTO.txt                            # クイックスタートガイド
 ├── LICENSE                              # GNU AGPL v3.0
-├── Makefile                             # make targets: build, release, run, start, clean, size
-├── proxy.txt                            # Proxy list (optional)
-├── README.md                            # This file
-├── run.sh                               # Run helper: run, enroll, bg, bgprobe, screen, probe, selftest, stop, build
-└── session.json                         # Account email, password, and key cache (auto-generated)
+├── Makefile                             # make ターゲット：build, release, run, start, clean, size
+├── proxy.txt                            # プロキシリスト（任意）
+├── README.md                            # このファイルや
+├── run.sh                               # 実行ヘルパー：run, enroll, bg, bgprobe, screen, probe, selftest, stop, build
+└── session.json                         # アカウントのメール・パスワード・鍵のキャッシュ（自動生成）
 ```
 
 ---
 
-## Continuous Integration
+## CI（継続的インテグレーション）
 
-The GitHub Actions workflow runs on pushes to `main` or `master` and on manual dispatch. It builds the release binary on all three platforms and uploads the artifacts.
+GitHub Actions のワークフローは `main` または `master` へのプッシュ時と手動トリガーで動くで。3プラットフォームでリリースバイナリをビルドしてアーティファクトをアップロードするで。
 
-| Platform | Artifact |
+| プラットフォーム | アーティファクト |
 |---|---|
 | Linux | `tokenharbor-bot-linux-x86_64` |
 | Windows | `tokenharbor-bot-windows-x86_64` |
@@ -359,9 +359,9 @@ The GitHub Actions workflow runs on pushes to `main` or `master` and on manual d
 
 ---
 
-## Disclaimer
+## 免責事項
 
-This tool is built for educational and technical exploration purposes. Use it wisely and at your own responsibility.
+このツールは学習目的と技術的な探求のために作ったもんやで。賢く使うてな、自己責任でよろしくやで。
 
 ---
 
