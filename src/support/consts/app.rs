@@ -6,6 +6,9 @@ pub const STATE_FILE: &str = "session.json";
 #[allow(dead_code)]
 pub const ENABLE_FREE_MODELS: bool = true;
 
+pub const STEP_ATTEMPTS: u32 = 3;
+pub const STEP_RETRY_MILLIS: u64 = 2000;
+
 pub const MAIL_POLLS: u32 = 40;
 pub const MAIL_POLL_SECONDS: u64 = 5;
 pub const MAIL_RETRY_SECONDS: u64 = 20;
