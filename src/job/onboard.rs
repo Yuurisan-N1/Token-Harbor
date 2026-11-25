@@ -1,4 +1,6 @@
+use std::future::Future;
 use std::path::Path;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -7,8 +9,13 @@ use crate::net::gate::{read_settings, Gate};
 use crate::step::mailbox::Mailbox;
 use crate::step::{apikey, freemode, signup, verify};
 use crate::support::cfg::loader::Setup;
-use crate::support::consts::app::{DATA_FILE, KEY_NAME, KEY_PREFIX, STATE_FILE};
-use crate::support::consts::net::{BASE_URL, SOLVER_FILE};
+use crate::support::consts::app::{
+    DATA_FILE, KEY_NAME, KEY_PREFIX, STATE_FILE, STEP_ATTEMPTS, STEP_RETRY_MILLIS,
+};
+use crate::support::consts::net::{
+    BASE_URL, SOLVER_FILE, SOLVER_POLLS, SOLVER_RETRY_MILLIS, SOLVER_TOKEN_ATTEMPTS,
+};
+use crate::support::device::Device;
 use crate::support::error::{AppError, AppResult};
 use crate::support::log::format::{clock, lg, ly, mask_email, mask_key, num, status};
 use crate::wire::shape::{model_ids, plaintext_key};
@@ -18,6 +25,8 @@ pub struct Entry {
     pub password: String,
     pub api_key: String,
     pub created_at: String,
+    #[serde(default)]
+    pub device: Option<Device>,
 }
 
 #[derive(Debug, Clone)]
@@ -25,18 +34,19 @@ pub struct Account {
     pub email: String,
     pub password: String,
     pub api_key: String,
+    pub device: Device,
 }
 
 pub async fn signup(setup: &Setup, slot: usize) -> AppResult<Account> {
     let proxy = setup.proxy_for(slot);
-    let gate = open_gate(setup.root.as_path()).await?;
 
     lg(&format!("Talking to {}", BASE_URL));
     if let Some(proxy) = proxy {
         ly(&format!("Using proxy {}", proxy.masked()));
     }
 
-    let site = Site::open(BASE_URL, proxy)?;
+    let identity = signup::fresh_identity();
+    let site = Site::open_as(BASE_URL, proxy, identity.device.clone())?;
 
     status("Opening the mailbox");
     let mailbox = Mailbox::open(proxy).await?;
@@ -45,11 +55,11 @@ pub async fn signup(setup: &Setup, slot: usize) -> AppResult<Account> {
         mask_email(mailbox.address())
     ));
 
-    let identity = signup::fresh_identity();
     status("Creating the account");
+    let token = fetch_token(setup).await?;
     signup::submit(
         &site,
-        &gate,
+        &token,
         mailbox.address(),
         &setup.config.timezone(),
         &identity,
@@ -63,18 +73,18 @@ pub async fn signup(setup: &Setup, slot: usize) -> AppResult<Account> {
     lg("The account password was accepted by the server");
 
     status("Waiting for the verification mail");
-    let token = mailbox.wait_for_token(&mut |_round| {}).await?;
+    let token = again(|| mailbox.wait_quiet()).await?;
 
-    verify::follow(&site, &token).await?;
+    again(|| verify::follow(&site, &token)).await?;
     lg("The account was verified by the server");
     if !verify::confirm(&site).await.unwrap_or(true) {
         ly("The server has not flagged the mail yet");
     }
 
-    freemode::enable_free_models(&site).await?;
+    again(|| freemode::enable_free_models(&site)).await?;
 
     status("Creating the key");
-    let key = apikey::create(&site, KEY_NAME).await?;
+    let key = again(|| apikey::create(&site, KEY_NAME)).await?;
     if !key.starts_with(KEY_PREFIX) {
         ly("The key came back without the expected prefix");
     }
@@ -84,9 +94,55 @@ pub async fn signup(setup: &Setup, slot: usize) -> AppResult<Account> {
         email: mailbox.address().to_string(),
         password: identity.password.clone(),
         api_key: key,
+        device: identity.device.clone(),
     };
     save(setup, &account)?;
     Ok(account)
+}
+
+async fn again<T, F, Fut>(mut step: F) -> AppResult<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = AppResult<T>>,
+{
+    let mut left = STEP_ATTEMPTS.max(1);
+    loop {
+        match step().await {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                left -= 1;
+                if left == 0 || !worth_again(&err) {
+                    return Err(err);
+                }
+                tokio::time::sleep(Duration::from_millis(STEP_RETRY_MILLIS)).await;
+            }
+        }
+    }
+}
+
+fn worth_again(err: &AppError) -> bool {
+    matches!(err, AppError::Network(_))
+}
+
+async fn fetch_token(setup: &Setup) -> AppResult<String> {
+    let per_try = (SOLVER_POLLS / SOLVER_TOKEN_ATTEMPTS).max(1);
+    let mut left = SOLVER_TOKEN_ATTEMPTS.max(1);
+    loop {
+        let outcome = match open_gate(setup.root.as_path()).await {
+            Ok(gate) => gate.token(per_try).await,
+            Err(err) => Err(err),
+        };
+        match outcome {
+            Ok(token) => return Ok(token),
+            Err(err) => {
+                left -= 1;
+                if left == 0 {
+                    return Err(err);
+                }
+                tokio::time::sleep(Duration::from_millis(SOLVER_RETRY_MILLIS)).await;
+            }
+        }
+    }
 }
 
 async fn open_gate(root: &Path) -> AppResult<Gate> {
@@ -127,6 +183,7 @@ pub fn save(setup: &Setup, account: &Account) -> AppResult<()> {
             password: account.password.clone(),
             api_key: account.api_key.clone(),
             created_at: now(),
+            device: Some(account.device.clone()),
         })
         .unwrap_or(serde_json::Value::Null),
     );
@@ -212,13 +269,24 @@ pub fn stored_email(setup: &Setup) -> AppResult<Option<String>> {
         .filter(|value| !value.is_empty()))
 }
 
+pub fn stored_device(setup: &Setup, email: &str) -> Option<Device> {
+    let path = setup.root.join(STATE_FILE);
+    let body = std::fs::read_to_string(&path).ok()?;
+    let book: serde_json::Value = serde_json::from_str(&body).ok()?;
+    let entry = book.get(email)?;
+    serde_json::from_value::<Entry>(entry.clone())
+        .ok()
+        .and_then(|row| row.device)
+}
+
 pub async fn drive(setup: &Setup, account: &Account, slot: usize) -> AppResult<()> {
     let proxy = setup.proxy_for(slot);
-    let mut site = Site::open(BASE_URL, proxy)?;
+    let device = stored_device(setup, &account.email).unwrap_or(account.device.clone());
+    let mut site = Site::open_as(BASE_URL, proxy, device)?;
     site.adopt(&account.api_key);
 
     status("Reading the model list");
-    let rows = models(&site).await?;
+    let rows = again(|| models(&site)).await?;
     lg(&format!(
         "The model list answers with {} models",
         rows.len()
@@ -230,11 +298,11 @@ pub async fn drive(setup: &Setup, account: &Account, slot: usize) -> AppResult<(
         .find(|id| id.ends_with(":free"))
         .cloned()
         .unwrap_or_else(|| rows[0].clone());
-    let text = chat(&site, &model, "Reply with ok").await?;
+    let text = again(|| chat(&site, &model, "Reply with ok")).await?;
     lg(&format!("{} answered: {}", model, text.trim()));
 
     status("Reading the usage headers");
-    for (name, value) in usage(&site).await? {
+    for (name, value) in again(|| usage(&site)).await? {
         ly(&format!("{}: {}", name, value));
     }
     Ok(())
@@ -260,15 +328,60 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_fresh_entry_serialises_with_three_fields() {
+    fn a_fresh_entry_carries_the_device() {
         let entry = Entry {
             password: "p".to_string(),
             api_key: "thk_live_x".to_string(),
             created_at: "2026-11-20 10:00:00".to_string(),
+            device: Some(Device::plain()),
         };
         let value = serde_json::to_value(&entry).unwrap();
-        assert_eq!(value.as_object().unwrap().len(), 3);
+        assert_eq!(value.as_object().unwrap().len(), 4);
         assert_eq!(value["api_key"], "thk_live_x");
+        assert!(value["device"]["agent"]
+            .as_str()
+            .unwrap()
+            .contains("Mozilla/5.0"));
+    }
+
+    #[test]
+    fn an_old_entry_without_a_device_still_reads() {
+        let text = r#"{"th-a@b.test":{"password":"p","api_key":"k","created_at":"x"}}"#;
+        let book: serde_json::Value = serde_json::from_str(text).unwrap();
+        let row: Entry = serde_json::from_value(book["th-a@b.test"].clone()).unwrap();
+        assert!(row.device.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_timed_out_step_is_tried_again() {
+        let mut calls = 0u32;
+        let value = again(|| {
+            calls += 1;
+            let round = calls;
+            async move {
+                if round < 3 {
+                    Err(AppError::network("the request timed out"))
+                } else {
+                    Ok(round)
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(value, 3);
+        assert_eq!(calls, 3);
+    }
+
+    #[tokio::test]
+    async fn a_refusal_is_not_tried_again() {
+        let mut calls = 0u32;
+        let outcome: AppResult<()> = again(|| {
+            calls += 1;
+            async { Err(AppError::api("the server refused")) }
+        })
+        .await;
+        assert!(outcome.is_err());
+        assert_eq!(calls, 1);
     }
 
     #[test]
@@ -277,6 +390,7 @@ mod tests {
             email: "th-a@b.test".to_string(),
             password: "secret".to_string(),
             api_key: "thk_live_abc".to_string(),
+            device: Device::plain(),
         };
         assert_eq!(account.email, "th-a@b.test");
         assert_eq!(account.password, "secret");
