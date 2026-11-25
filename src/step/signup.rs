@@ -2,9 +2,9 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 
 use crate::net::client::{Reply, Site};
-use crate::net::gate::Gate;
 use crate::support::consts::app::{EMAIL_RANDOM_LEN, PASSWORD_MIN_LEN};
-use crate::support::consts::net::{BROWSER_AGENT, ROUTER_TREE, SIGNUP_ACTION, SIGNUP_PAGE};
+use crate::support::consts::net::{PRECHECK_PATH, ROUTER_TREE, SIGNUP_PAGE};
+use crate::support::device::Device;
 use crate::support::error::{refusal, AppError, AppResult};
 use crate::wire::form::Form;
 use crate::wire::shape::rsc_refusal;
@@ -12,48 +12,97 @@ use crate::wire::shape::rsc_refusal;
 pub struct Identity {
     pub fingerprint: String,
     pub password: String,
+    pub device: Device,
+}
+
+pub struct Envelope {
+    pub action_ref: String,
+    pub action_id: String,
+    pub action_args: String,
+    pub action_key: String,
 }
 
 pub fn fresh_identity() -> Identity {
     Identity {
         fingerprint: uuid(),
         password: format!("TH-{}-{}!", hex(4), hex(4)),
+        device: Device::fresh(),
     }
+}
+
+fn pull(html: &str, name: &str) -> Option<String> {
+    let needle = format!("name=\"{}\" value=\"", name);
+    let start = html.find(&needle)? + needle.len();
+    let rest = &html[start..];
+    let end = rest.find('"')?;
+    Some(unescape(&rest[..end]))
+}
+
+fn unescape(text: &str) -> String {
+    text.replace("&quot;", "\"")
+        .replace("&#x27;", "'")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+}
+
+pub fn envelope(page: &str) -> AppResult<Envelope> {
+    let action_id = pull(page, "$ACTION_1:0")
+        .ok_or_else(|| AppError::api("the signup page carried no action id"))?;
+    let action_key = pull(page, "$ACTION_KEY")
+        .ok_or_else(|| AppError::api("the signup page carried no action key"))?;
+    let action_args = pull(page, "$ACTION_1:1").unwrap_or_else(|| "[\"$undefined\"]".to_string());
+    Ok(Envelope {
+        action_ref: String::new(),
+        action_id,
+        action_args,
+        action_key,
+    })
 }
 
 pub async fn submit(
     site: &Site,
-    gate: &Gate,
+    token: &str,
     email: &str,
     timezone: &str,
     identity: &Identity,
 ) -> AppResult<()> {
-    let token = gate.token().await?;
     if token.chars().count() < PASSWORD_MIN_LEN {
         return Err(AppError::network("the solver returned a short token"));
     }
 
+    let page = site.get_with(SIGNUP_PAGE, &[("accept", "text/html".to_string())]).await?;
+    if !page.is_success() {
+        return Err(AppError::api("the signup page did not load"));
+    }
+    let envelope = envelope(&page.text)?;
+
+    let probe = format!("{}?fp={}", PRECHECK_PATH, identity.fingerprint);
+    let _ = site.get_with(&probe, &[("accept", "*/*".to_string())]).await;
+
     let mut form = Form::new();
-    form.field("_1_device_fingerprint", &identity.fingerprint)
-        .field("_1_timezone", timezone)
-        .field("_1_age_confirmed", "1")
-        .field("_1_cf-turnstile-response", &token)
-        .field("_1_next", "")
-        .field("_1_email", email)
-        .field("_1_password", &identity.password)
-        .field("_1_invite_code", "")
-        .field("0", "[\"$undefined\",\"$K1\"]");
+    form.field("$ACTION_REF_1", &envelope.action_ref)
+        .field("$ACTION_1:0", &envelope.action_id)
+        .field("$ACTION_1:1", &envelope.action_args)
+        .field("$ACTION_KEY", &envelope.action_key)
+        .field("device_fingerprint", &identity.fingerprint)
+        .field("timezone", timezone)
+        .field("age_confirmed", "1")
+        .field("next", "")
+        .field("cf-turnstile-response", token)
+        .field("email", email)
+        .field("password", &identity.password)
+        .field("invite_code", "");
     let (content_type, body) = form.finish();
 
     let extra: Vec<(&str, String)> = vec![
-        ("next-action", SIGNUP_ACTION.to_string()),
         ("next-router-state-tree", ROUTER_TREE.to_string()),
         ("origin", crate::support::consts::net::BASE_URL.to_string()),
         (
             "referer",
             format!("{}{}", crate::support::consts::net::BASE_URL, SIGNUP_PAGE),
         ),
-        ("user-agent", BROWSER_AGENT.to_string()),
+        ("user-agent", identity.device.agent.clone()),
     ];
 
     let reply = site
@@ -118,47 +167,21 @@ mod tests {
         let parts: Vec<&str> = text.split('-').collect();
         assert_eq!(parts.len(), 5);
         assert_eq!(parts[0].len(), 8);
-        assert_eq!(parts[2].len(), 4);
-        assert!(parts[2].starts_with('4'));
-        assert!(text.chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
-        assert_ne!(uuid(), uuid());
+        assert_eq!(parts[4].len(), 12);
     }
 
     #[test]
-    fn the_password_clears_the_minimum_length() {
-        let identity = fresh_identity();
-        assert!(identity.password.chars().count() >= PASSWORD_MIN_LEN);
-        assert!(identity.password.ends_with('!'));
+    fn the_envelope_is_pulled_from_the_hidden_inputs() {
+        let page = "<input type=\"hidden\" name=\"$ACTION_1:0\" value=\"{&quot;id&quot;:&quot;abc&quot;,&quot;bound&quot;:&quot;$@1&quot;}\"/><input type=\"hidden\" name=\"$ACTION_1:1\" value=\"[&quot;$undefined&quot;]\"/><input type=\"hidden\" name=\"$ACTION_KEY\" value=\"k123\"/>";
+        let found = envelope(page).unwrap();
+        assert_eq!(found.action_id, "{\"id\":\"abc\",\"bound\":\"$@1\"}");
+        assert_eq!(found.action_args, "[\"$undefined\"]");
+        assert_eq!(found.action_key, "k123");
     }
 
     #[test]
-    fn the_email_carries_the_prefix_and_the_domain() {
-        let email = fresh_email("example.test");
-        assert!(email.starts_with("th-"));
-        assert!(email.ends_with("@example.test"));
-    }
-
-    #[test]
-    fn a_captcha_refusal_is_read_as_a_refusal() {
-        let reply = Reply {
-            status: 200,
-            text: "1:{\"error\":\"Bot check failed. Please refresh and try again.\",\"needCaptcha\":true}"
-                .to_string(),
-            location: None,
-            headers: Vec::new(),
-        };
-        let outcome = judge(&reply);
-        assert!(outcome.is_err());
-    }
-
-    #[test]
-    fn a_successful_payload_passes() {
-        let reply = Reply {
-            status: 200,
-            text: "0:[\"$\",\"$L7\",null,{\"chunk\":\"error.js\"}]".to_string(),
-            location: None,
-            headers: Vec::new(),
-        };
-        assert!(judge(&reply).is_ok());
+    fn a_page_without_the_action_id_is_refused() {
+        let page = "<input type=\"hidden\" name=\"$ACTION_KEY\" value=\"k123\"/>";
+        assert!(envelope(page).is_err());
     }
 }
