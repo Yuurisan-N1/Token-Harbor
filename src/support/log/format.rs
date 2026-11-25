@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn the_key_keeps_a_head_and_a_tail_only() {
         let text =
-            mask_key("thk_live_yOz0d7fN27UC6jklOX75DOfSdu43Qo2-n9wKjyzxyoeV7ALLP0Nhpv_R940E_vEX");
+            mask_key("thk_live_yOz0d7fN27UC6jglOX73DOfSau93Qo2-n9wKjyzxyoeV7ALLP0Nhpv_R940E_vEX");
         assert_eq!(text, "thk_live**_R940E_vEX");
         assert!(!text.contains("yOz0d7fN"));
     }
