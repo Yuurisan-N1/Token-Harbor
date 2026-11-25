@@ -7,9 +7,8 @@ use serde_json::Value;
 
 use crate::net::egress::Proxy;
 use crate::support::consts::app::AUTH_COOKIE_MARK;
-use crate::support::consts::net::{
-    BASE_URL, BROWSER_AGENT, CONNECT_TIMEOUT_SECS, READ_TIMEOUT_SECS,
-};
+use crate::support::consts::net::{BASE_URL, CONNECT_TIMEOUT_SECS, READ_TIMEOUT_SECS};
+use crate::support::device::Device;
 use crate::support::error::{AppError, AppResult};
 
 pub struct Reply {
@@ -39,15 +38,20 @@ pub struct Site {
     jar: Arc<Jar>,
     base: String,
     bearer: String,
+    device: Device,
 }
 
 impl Site {
     pub fn open(base: &str, proxy: Option<&Proxy>) -> AppResult<Site> {
+        Site::open_as(base, proxy, Device::plain())
+    }
+
+    pub fn open_as(base: &str, proxy: Option<&Proxy>, device: Device) -> AppResult<Site> {
         let jar = Arc::new(Jar::default());
         let mut builder = Client::builder()
             .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECS))
             .timeout(Duration::from_secs(READ_TIMEOUT_SECS))
-            .user_agent(BROWSER_AGENT)
+            .user_agent(device.agent.clone())
             .cookie_provider(jar.clone())
             .gzip(true);
         if let Some(proxy) = proxy {
@@ -63,6 +67,7 @@ impl Site {
             jar,
             base: base.trim_end_matches('/').to_string(),
             bearer: String::new(),
+            device,
         })
     }
 
@@ -157,7 +162,10 @@ impl Site {
         let mut request = self
             .http
             .request(method, &url)
-            .header("accept-language", "en-US,en;q=0.9");
+            .header("accept-language", self.device.language.as_str())
+            .header("sec-ch-ua", self.device.brands.as_str())
+            .header("sec-ch-ua-mobile", self.device.mobile.as_str())
+            .header("sec-ch-ua-platform", self.device.platform.as_str());
 
         if let Some(accept) = accept {
             request = request.header("accept", accept);
